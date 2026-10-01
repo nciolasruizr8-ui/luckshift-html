@@ -1,0 +1,337 @@
+        <div id="facebox" class="facebox">
+          <div class="face-row"><strong id="facename">Swift</strong><span id="faceblurb">Quicker hands</span></div>
+          <div class="track"><i id="facebar"></i></div>
+        </div>
+      </div>
+      <p id="live" class="sr" aria-live="polite"></p>
+      <div id="title" class="sheet">
+        <div class="card">
+          <p class="kicker">A random rule. A narrow shaft.</p>
+          <h1>Luckshift</h1>
+          <p>Drift the die. Coral bars end the run, round chips break if the face is Heavy, teal gems feed the combo.</p>
+          <div id="mobile-faces" class="minis"></div>
+          <button id="drop" class="go" type="button">Drop in</button>
+          <div class="foot"><span>Drag, A / D, or a stick</span><b id="title-foot">P pauses</b></div>
+        </div>
+      </div>
+      <div id="paused" class="dim hidden">
+        <div class="modal paused">
+          <h2>Paused</h2>
+          <p>The shaft is holding its breath.</p>
+          <button id="resume" class="resume" type="button">Resume</button>
+          <div class="pair">
+            <button id="sound-toggle" class="ghost" type="button"></button>
+            <button id="shake-toggle" class="ghost" type="button"></button>
+          </div>
+        </div>
+      </div>
+      <div id="dead" class="dim dead hidden">
+        <div class="modal">
+          <p class="kicker danger">Shaft closed</p>
+          <h2 id="final">0</h2>
+          <p id="verdict">Best 0</p>
+          <dl class="stats">
+            <div><dt>Time</dt><dd id="stat-time">0s</dd></div>
+            <div><dt>Gems</dt><dd id="stat-gems">0</dd></div>
+            <div><dt>Close</dt><dd id="stat-close">0</dd></div>
+          </dl>
+          <button id="again" class="go" type="button">Roll again</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+const FACES = [
+    {
+        id: 1,
+        name: "Swift",
+        blurb: "Quicker hands",
+        move: 1.5,
+        scroll: 1,
+        score: 1,
+        magnet: false,
+        smash: false,
+        ward: false,
+        echo: false,
+    },
+    {
+        id: 2,
+        name: "Heavy",
+        blurb: "Smash the chips",
+        move: 0.72,
+        scroll: 0.88,
+        score: 1,
+        magnet: false,
+        smash: true,
+        ward: false,
+        echo: false,
+    },
+    {
+        id: 3,
+        name: "Magnet",
+        blurb: "Gems lean toward you",
+        move: 1,
+        scroll: 1,
+        score: 1,
+        magnet: true,
+        smash: false,
+        ward: false,
+        echo: false,
+    },
+    {
+        id: 4,
+        name: "Ward",
+        blurb: "The next hit is free",
+        move: 1,
+        scroll: 1,
+        score: 1,
+        magnet: false,
+        smash: false,
+        ward: true,
+        echo: false,
+    },
+    {
+        id: 5,
+        name: "Blaze",
+        blurb: "Double score, faster shaft",
+        move: 1.08,
+        scroll: 1.24,
+        score: 2,
+        magnet: false,
+        smash: false,
+        ward: false,
+        echo: false,
+    },
+    {
+        id: 6,
+        name: "Echo",
+        blurb: "A ghost gathers gems",
+        move: 1,
+        scroll: 1,
+        score: 1,
+        magnet: false,
+        smash: false,
+        ward: false,
+        echo: true,
+    },
+];
+const VW = 420;
+const VH = 740;
+const PLAYER_Y = 568;
+const HIT_R = 12;
+const SAVE_KEY = "luckshift.save.v1";
+const STEP = 1 / 60;
+const INK = "#101614";
+const SHAFT = "#0e1512";
+const PAPER = "#efe7d6";
+const AMBER = "#e6a23c";
+const TEAL = "#2fbfa0";
+const CORAL = "#e15a45";
+const CHIP = "#c4553c";
+function clamp(v, a, b) {
+    return Math.max(a, Math.min(b, v));
+}
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+function prefersReducedMotion() {
+    return (typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+function loadSave() {
+    const fallback = {
+        version: 1,
+        best: 0,
+        sound: true,
+        shake: !prefersReducedMotion(),
+    };
+    try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw)
+            return fallback;
+        const parsed = JSON.parse(raw);
+        if (parsed.version !== 1)
+            return fallback;
+        return {
+            version: 1,
+            best: typeof parsed.best === "number" && parsed.best >= 0 ? parsed.best : 0,
+            sound: typeof parsed.sound === "boolean" ? parsed.sound : true,
+            shake: typeof parsed.shake === "boolean" ? parsed.shake : fallback.shake,
+        };
+    }
+    catch {
+        return fallback;
+    }
+}
+function writeSave(save) {
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    }
+    catch {
+        /* private mode / quota — keep playing */
+    }
+}
+function createLuckshift(canvas, emit) {
+    const context = canvas.getContext("2d");
+    if (!context) {
+        return { start() { }, togglePause() { }, toggleSound() { }, toggleShake() { }, destroy() { } };
+    }
+    const ctx = context;
+    const save = loadSave();
+    const keys = new Set();
+    let injected = null;
+    let steerInject = null;
+    let pointerId = null;
+    let pointerX = VW / 2;
+    let layout = { scale: 1, ox: 0, oy: 0, cssW: 1, cssH: 1 };
+    let phase = "title";
+    let playerX = VW / 2;
+    let playerVx = 0;
+    let spin = 0.4;
+    let faceIndex = 0;
+    let rolling = false;
+    let timer = 5;
+    let timerMax = 5;
+    let ward = false;
+    let invuln = 0;
+    let score = 0;
+    let combo = 0;
+    let comboT = 0;
+    let gems = 0;
+    let nears = 0;
+    let seconds = 0;
+    let distance = 0;
+    let scrollMeter = 0;
+    let safeX = VW / 2;
+    let newBest = false;
+    let best = save.best;
+    let soundOn = save.sound;
+    let shakeOn = save.shake;
+    let titleT = 0;
+    let preview = 0;
+    let hitstop = 0;
+    let trauma = 0;
+    let flash = 0;
+    let pop = 0;
+    let lockPulse = 0;
+    let hint = 3.2;
+    let dying = 0;
+    let time = 0;
+    let runT = 0;
+    let acc = 0;
+    let last = performance.now();
+    let stopped = false;
+    let lastHudKey = "";
+    let raf = 0;
+    const echo = Array.from({ length: 14 }, () => VW / 2);
+    let echoTick = 0;
+    const hazards = [];
+    const gemList = [];
+    const floaters = [];
+    const particles = Array.from({ length: 180 }, () => ({
+        alive: false,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        life: 0,
+        max: 1,
+        size: 2,
+        color: PAPER,
+    }));
+    const audio = createMixer();
+    function face() {
+        return FACES[faceIndex];
+    }
+    function difficulty() {
+        return clamp(distance / 7600, 0, 1);
+    }
+    function scrollSpeed() {
+        const d = difficulty();
+        return (198 + d * 210) * face().scroll;
+    }
+    function moveSpeed() {
+        return 336 * face().move;
+    }
+    function held(code) {
+        if (injected)
+            return injected.includes(code);
+        return keys.has(code);
+    }
+    function snapshot() {
+        const show = phase === "title" ? FACES[preview] : face();
+        return {
+            phase,
+            score: Math.floor(score),
+            best: Math.floor(best),
+            combo,
+            face: show.id,
+            faceName: phase !== "title" && rolling ? "Rolling" : show.name,
+            faceBlurb: phase !== "title" && rolling ? "The die is in the air" : show.blurb,
+            faceT: phase === "title" ? 1 : clamp(timer / timerMax, 0, 1),
+            rolling: phase !== "title" && rolling,
+            ward,
+            gems,
+            nears,
+            seconds: Math.floor(seconds),
+            sound: soundOn,
+            shake: shakeOn,
+            newBest,
+        };
+    }
+    function pushHud(force = false) {
+        const snap = snapshot();
+        const key = [
+            snap.phase,
+            snap.score,
+            snap.best,
+            snap.combo,
+            snap.face,
+            snap.faceName,
+            Math.round(snap.faceT * 24),
+            snap.ward ? 1 : 0,
+            snap.gems,
+            snap.nears,
+            snap.seconds,
+            snap.sound ? 1 : 0,
+            snap.shake ? 1 : 0,
+            snap.newBest ? 1 : 0,
+        ].join("|");
+        if (!force && key === lastHudKey)
+            return;
+        lastHudKey = key;
+        if (!stopped)
+            emit(snap);
+    }
+    function resetRun() {
+        playerX = VW / 2;
+        playerVx = 0;
+        spin = 0.2;
+        faceIndex = 0;
+        rolling = false;
+        timer = 5.2;
+        timerMax = 5.2;
+        ward = false;
+        invuln = 0;
+        score = 0;
+        combo = 0;
+        comboT = 0;
+        gems = 0;
+        nears = 0;
+        seconds = 0;
+        distance = 0;
+        scrollMeter = 140;
+        safeX = VW / 2;
+        newBest = false;
+        hitstop = 0;
+        trauma = 0;
+        flash = 0;
+        pop = 0;
+        lockPulse = 0;
+        hint = 3.4;
+        dying = 0;
+        runT = 0;
+        echo.fill(VW / 2);
+        hazards.length = 0;
+        gemList.length = 0;
+        floaters.length = 0;
