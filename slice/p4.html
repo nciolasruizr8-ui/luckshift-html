@@ -1,0 +1,257 @@
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = INK;
+        ctx.fillRect(0, 0, cssW, cssH);
+        ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (ox + sx), dpr * (oy + sy));
+        ctx.fillStyle = SHAFT;
+        ctx.beginPath();
+        ctx.roundRect(10, 8, VW - 20, VH - 16, 26);
+        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(10, 8, VW - 20, VH - 16, 26);
+        ctx.clip();
+        const shift = distance * 0.45 + time * 18;
+        ctx.strokeStyle = "rgba(239,231,214,0.055)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 14; i++) {
+            const y = ((i * 64 - (shift % 64)) + 128) % (VH + 64) - 32;
+            ctx.beginPath();
+            ctx.moveTo(28, y);
+            ctx.lineTo(VW - 28, y);
+            ctx.stroke();
+        }
+        const edge = face().score > 1 && phase === "play" ? "rgba(225,90,69,0.45)" : "rgba(230,162,60,0.28)";
+        ctx.strokeStyle = edge;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(18, 16, VW - 36, VH - 32);
+        for (const h of hazards) {
+            if (!h.alive)
+                continue;
+            if (h.kind === "chip") {
+                ctx.fillStyle = CHIP;
+                ctx.beginPath();
+                ctx.arc(h.x, h.y, h.w, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = "rgba(239,231,214,0.35)";
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+            else {
+                ctx.fillStyle = CORAL;
+                ctx.beginPath();
+                ctx.roundRect(h.x, h.y, h.w, h.h, 6);
+                ctx.fill();
+                ctx.fillStyle = "rgba(239,231,214,0.18)";
+                ctx.fillRect(h.x + 3, h.y + 3, Math.max(0, h.w - 6), 3);
+            }
+        }
+        for (const g of gemList) {
+            if (!g.alive)
+                continue;
+            ctx.save();
+            ctx.translate(g.x, g.y);
+            ctx.rotate(Math.PI / 4 + Math.sin(g.spin) * 0.08);
+            ctx.fillStyle = TEAL;
+            ctx.fillRect(-7, -7, 14, 14);
+            ctx.fillStyle = "rgba(239,231,214,0.75)";
+            ctx.fillRect(-3, -3, 4, 4);
+            ctx.restore();
+        }
+        if (phase === "play" && face().echo && dying <= 0) {
+            drawDie(echo[0] ?? playerX, PLAYER_Y, 16, face().id, 0.28);
+        }
+        if (lockPulse > 0 && phase === "play") {
+            ctx.strokeStyle = `rgba(230,162,60,${lockPulse * 0.7})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(playerX, PLAYER_Y, 26 + (1 - lockPulse) * 70, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        const showDie = phase !== "dead";
+        if (showDie) {
+            const y = phase === "play" || phase === "pause" ? PLAYER_Y : 236 + Math.sin(time * 1.4) * 8;
+            const pip = phase === "title" ? FACES[preview].id : rolling ? null : face().id;
+            let alpha = 1;
+            if (invuln > 0)
+                alpha = 0.55 + Math.sin(time * 28) * 0.25;
+            if (dying > 0)
+                alpha = clamp(dying / 0.45, 0, 1);
+            if (ward && phase === "play") {
+                ctx.strokeStyle = TEAL;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(playerX, y, 30, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            drawDie(phase === "play" || phase === "pause" ? playerX : VW / 2, y, phase === "title" ? 34 : 18, pip, alpha);
+        }
+        for (const p of particles) {
+            if (!p.alive)
+                continue;
+            ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+        ctx.font = "600 16px Fraunces, Georgia, serif";
+        ctx.textAlign = "center";
+        for (const f of floaters) {
+            ctx.globalAlpha = clamp(f.life / f.max, 0, 1);
+            ctx.fillStyle = f.color;
+            ctx.fillText(f.text, f.x, f.y);
+        }
+        ctx.globalAlpha = 1;
+        if (phase === "play" && hint > 0) {
+            ctx.globalAlpha = clamp(hint / 1.2, 0, 0.85);
+            ctx.fillStyle = PAPER;
+            ctx.font = "500 15px Outfit, sans-serif";
+            ctx.fillText("Drag, or A and D", VW / 2, PLAYER_Y + 78);
+            ctx.globalAlpha = 1;
+        }
+        ctx.restore();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (flash > 0) {
+            ctx.fillStyle = `rgba(239,231,214,${flash * 0.28})`;
+            ctx.fillRect(0, 0, cssW, cssH);
+        }
+        const vg = ctx.createRadialGradient(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.35, cssW / 2, cssH / 2, Math.max(cssW, cssH) * 0.72);
+        vg.addColorStop(0, "rgba(0,0,0,0)");
+        vg.addColorStop(1, "rgba(0,0,0,0.35)");
+        ctx.fillStyle = vg;
+        ctx.fillRect(0, 0, cssW, cssH);
+    }
+    function frame(now) {
+        if (stopped)
+            return;
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        time += dt;
+        audio.tick(soundOn && (phase === "play" || phase === "title"));
+        if (hitstop > 0) {
+            hitstop -= dt;
+            updatePresentation(dt);
+            render();
+            pushHud();
+            raf = requestAnimationFrame(frame);
+            return;
+        }
+        if (phase === "play") {
+            acc += dt;
+            let guard = 0;
+            while (acc >= STEP && guard < 5) {
+                updatePlay(STEP);
+                acc -= STEP;
+                guard += 1;
+            }
+            if (guard === 5)
+                acc = 0;
+        }
+        else {
+            acc = 0;
+            if (phase === "title")
+                updateDecor(dt);
+        }
+        updatePresentation(dt);
+        render();
+        pushHud();
+        raf = requestAnimationFrame(frame);
+    }
+    function onKeyDown(e) {
+        if (GAME_KEYS.has(e.code))
+            e.preventDefault();
+        if (e.repeat)
+            return;
+        const fromButton = e.target instanceof HTMLElement && Boolean(e.target.closest("button"));
+        if (!fromButton)
+            keys.add(e.code);
+        if (fromButton)
+            return;
+        if ((e.code === "Space" || e.code === "Enter") && (phase === "title" || phase === "dead")) {
+            start();
+        }
+        else if (e.code === "KeyP" || e.code === "Escape") {
+            if (phase === "play" || phase === "pause")
+                togglePause();
+        }
+    }
+    function onKeyUp(e) {
+        keys.delete(e.code);
+    }
+    function clearKeys() {
+        keys.clear();
+        pointerId = null;
+    }
+    function onPointerDown(e) {
+        if (e.button !== 0 && e.pointerType === "mouse")
+            return;
+        e.preventDefault();
+        audio.unlock();
+        if (phase === "title" || phase === "dead") {
+            start();
+            pointerId = e.pointerId;
+            pointerX = virtualX(e.clientX);
+            canvas.setPointerCapture(e.pointerId);
+            return;
+        }
+        if (phase !== "play")
+            return;
+        pointerId = e.pointerId;
+        pointerX = virtualX(e.clientX);
+        canvas.setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e) {
+        if (e.pointerId !== pointerId)
+            return;
+        pointerX = virtualX(e.clientX);
+    }
+    function onPointerUp(e) {
+        if (e.pointerId !== pointerId)
+            return;
+        pointerId = null;
+    }
+    function onVis() {
+        if (document.hidden) {
+            clearKeys();
+            if (phase === "play") {
+                phase = "pause";
+                pushHud(true);
+            }
+            writeSave({ ...save, best, sound: soundOn, shake: shakeOn });
+        }
+        else {
+            last = performance.now();
+            if (soundOn)
+                audio.unlock();
+        }
+    }
+    function onPadEdge() {
+        const pads = navigator.getGamepads?.();
+        if (!pads)
+            return;
+        for (const g of pads) {
+            if (!g)
+                continue;
+            const startBtn = g.buttons[9]?.pressed || g.buttons[8]?.pressed;
+            const confirm = g.buttons[0]?.pressed;
+            if (startBtn && !padWasStart) {
+                if (phase === "play" || phase === "pause")
+                    togglePause();
+                else if (phase === "title" || phase === "dead")
+                    start();
+            }
+            if (confirm && !padWasConfirm && (phase === "title" || phase === "dead"))
+                start();
+            padWasStart = Boolean(startBtn);
+            padWasConfirm = Boolean(confirm);
+            return;
+        }
+        padWasStart = false;
+        padWasConfirm = false;
+    }
+    let padWasStart = false;
+    let padWasConfirm = false;
+    const padTimer = window.setInterval(onPadEdge, 50);
+    const GAME_KEYS = new Set([
+        "ArrowLeft",
