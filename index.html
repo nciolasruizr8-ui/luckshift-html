@@ -6,151 +6,26 @@
   <title>Luckshift</title>
   <meta name="description" content="Drift a die down a dark shaft while the face in play rewrites the rules.">
   <meta name="theme-color" content="#101614">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23101614'/%3E%3Crect x='7' y='6.5' width='18' height='19' rx='3.5' fill='%23e6a23c'/%3E%3Ccircle cx='12' cy='11.5' r='1.7' fill='%23101614'/%3E%3Ccircle cx='16' cy='16' r='1.7' fill='%23101614'/%3E%3Ccircle cx='20' cy='20.5' r='1.7' fill='%23101614'/%3E%3Ccircle cx='26.2' cy='8.2' r='2.1' fill='%232fbfa0'/%3E%3C/svg%3E">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg: #101614;
-      --surface: #1a2420;
-      --surface-2: #24302a;
-      --fg: #efe7d6;
-      --muted: #9aa89a;
-      --primary: #e6a23c;
-      --accent: #2fbfa0;
-      --danger: #e15a45;
-      --line: #2c3a34;
-      --radius: 1.25rem;
-      --sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-      --display: "Fraunces", ui-serif, Georgia, serif;
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
-    body { font-family: var(--sans); line-height: 1.5; overflow: hidden; }
-    button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-    button:active { transform: scale(0.98); }
-    .shell { display: flex; height: 100dvh; max-width: 72rem; margin: 0 auto; }
-    aside {
-      display: none;
-      width: 20rem;
-      flex-shrink: 0;
-      flex-direction: column;
-      justify-content: space-between;
-      border-right: 1px solid var(--line);
-      padding: 2rem;
-    }
-    .kicker { margin: 0; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--primary); }
-    h1 { margin: 0.75rem 0 0; font-family: var(--display); font-size: 3rem; font-weight: 560; line-height: 1; }
-    .lede { margin: 1rem 0 0; max-width: 18rem; color: var(--muted); font-size: 0.875rem; }
-    #faces { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
-    #faces li, .mini {
-      display: flex; align-items: center; gap: 0.75rem;
-      border: 1px solid var(--line); border-radius: var(--radius); padding: 0.5rem 0.75rem;
-    }
-    #faces li.on, .mini.on { border-color: var(--primary); background: var(--surface); }
-    .dot { width: 0.65rem; height: 0.65rem; border-radius: 999px; flex-shrink: 0; }
-    #faces .name { width: 4.2rem; font-size: 0.875rem; font-weight: 500; }
-    #faces .blurb, .help { color: var(--muted); font-size: 0.875rem; }
-    .help { margin: 0; }
-    .help b { color: var(--fg); font-weight: 500; }
-    .stage { position: relative; flex: 1; min-width: 0; }
-    canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
-    .run {
-      pointer-events: none; position: absolute; inset: 0 0 auto 0; z-index: 10; padding: 0.85rem 1rem;
-    }
-    .run-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
-    .score { margin: 0; font-family: var(--display); font-size: 2.5rem; font-weight: 560; line-height: 1; font-variant-numeric: tabular-nums; }
-    .meta { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
-    .combo { margin-left: 0.5rem; color: var(--accent); }
-    .iconrow { pointer-events: auto; display: flex; gap: 0.5rem; }
-    .iconbtn, .ghost {
-      display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
-      border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
-    }
-    .iconbtn { width: 2.75rem; height: 2.75rem; }
-    .facebox {
-      pointer-events: none; width: min(20rem, 100%); margin: 0.75rem auto 0;
-      border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 0.55rem 0.75rem;
-    }
-    .face-row { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
-    .face-row strong { font-family: var(--display); font-size: 1.15rem; font-weight: 560; }
-    .face-row span { color: var(--muted); font-size: 0.75rem; }
-    .track { margin-top: 0.45rem; height: 0.25rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-    .track i { display: block; height: 100%; width: 0; background: var(--primary); }
-    .track i.rolling { background: var(--muted); }
-    .sheet {
-      pointer-events: none; position: absolute; inset: 0; z-index: 10;
-      display: flex; flex-direction: column; justify-content: flex-end; padding: 1rem;
-    }
-    .card, .modal {
-      pointer-events: auto; width: min(28rem, 100%); margin: 0 auto;
-      border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 1.25rem;
-    }
-    .card h1 { font-size: 3rem; }
-    .card p, .modal p { margin: 0.75rem 0 0; color: var(--muted); font-size: 0.875rem; }
-    .minis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 1rem; }
-    .mini { display: block; text-align: center; padding: 0.5rem; }
-    .mini .dot { display: block; margin: 0 auto 0.25rem; width: 0.5rem; height: 0.5rem; }
-    .mini span:last-child { font-size: 0.75rem; font-weight: 500; }
-    .go, .resume {
-      margin-top: 1.15rem; width: 100%; height: 3rem; border-radius: var(--radius);
-      background: var(--primary); color: var(--bg); font-weight: 500; font-size: 1rem;
-      display: flex; align-items: center; justify-content: center; gap: 0.45rem;
-    }
-    .foot { margin-top: 0.75rem; display: flex; justify-content: space-between; gap: 0.75rem; color: var(--muted); font-size: 0.75rem; }
-    .foot b { color: var(--fg); font-weight: 500; }
-    .dim {
-      position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
-      background: color-mix(in srgb, var(--bg) 72%, transparent); padding: 1rem;
-    }
-    .modal { width: min(24rem, 100%); text-align: center; }
-    .modal h2 { margin: 0; font-family: var(--display); font-weight: 560; line-height: 1; }
-    .paused h2 { font-size: 2.5rem; }
-    .pair { margin-top: 0.75rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .ghost { height: 2.75rem; font-size: 0.875rem; }
-    .dead { align-items: flex-end; background: transparent; }
-    .dead .modal { text-align: left; }
-    .dead h2 { margin-top: 0.4rem; font-size: 3rem; font-variant-numeric: tabular-nums; }
-    .danger { color: var(--danger); }
-    .stats { margin: 1rem 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; }
-    .stats div { background: var(--surface-2); border-radius: var(--radius); padding: 0.45rem; }
-    .stats dt { color: var(--muted); font-size: 0.75rem; }
-    .stats dd { margin: 0; font-family: var(--display); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-    .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
-    .hidden { display: none !important; }
-    @media (min-width: 1024px) {
-      aside { display: flex; }
-      .card h1, .minis { display: none; }
-      .card p { margin-top: 0; }
-      .dead { align-items: center; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-    }
+    html, body { margin: 0; height: 100%; background: #101614; color: #efe7d6; font-family: Georgia, serif; }
+    p { max-width: 28rem; margin: 0; padding: 2rem; line-height: 1.5; }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <aside>
-      <div>
-        <p class="kicker">Arcade</p>
-        <h1>Luckshift</h1>
-        <p class="lede">A die rewrites the shaft every few seconds. Drift through the coral, pocket the teal, and don’t kiss the gates.</p>
-        <ol id="faces"></ol>
-      </div>
-      <p class="help">Drag to drift. <b>A</b> left, <b>D</b> right. <b>P</b> pauses.<span id="aside-best"></span></p>
-    </aside>
-    <section class="stage">
-      <canvas id="playfield" aria-label="Luckshift playfield"></canvas>
-      <div id="run" class="run hidden">
-        <div class="run-row">
-          <div>
-            <p id="score" class="score">0</p>
-            <p class="meta"><span id="bestline">Best 0</span><span id="combo" class="combo hidden"></span></p>
-          </div>
-          <div class="iconrow">
-            <button id="sound" class="iconbtn" type="button" aria-label="Mute sound"></button>
-            <button id="pause" class="iconbtn" type="button" aria-label="Pause"></button>
-          </div>
-        </div>
+  <p id="boot">Opening the shaft…</p>
+  <script>
+    const parts = ["p0", "p1", "p2", "p3", "p4", "p5", "p6"];
+    Promise.all(parts.map((name) => fetch("slice/" + name + ".html").then((response) => {
+      if (!response.ok) throw new Error(name);
+      return response.text();
+    }))).then((chunks) => {
+      document.open();
+      document.write(chunks.join(""));
+      document.close();
+    }).catch(() => {
+      const boot = document.getElementById("boot");
+      boot.textContent = "This page is HTML only. Serve the folder (python3 -m http.server) or open it on GitHub Pages. A double-clicked file cannot load the rest of the page.";
+    });
+  </script>
+</body>
+</html>
