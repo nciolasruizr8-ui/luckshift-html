@@ -1,0 +1,77 @@
+    const $ = (id) => document.getElementById(id);
+    const svg = (body) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
+    const ICON = {
+      play: svg('<polygon points="8,5 19,12 8,19" fill="currentColor" stroke="none"/>'),
+      pause: svg("<path d=\"M9 6v12M15 6v12\"/>"),
+      vol: svg("<path d=\"M11 5 6 9H3v6h3l5 4z\"/><path d=\"M16 9a4 4 0 0 1 0 6\"/>"),
+      mute: svg("<path d=\"M11 5 6 9H3v6h3l5 4z\"/><path d=\"m16 9 5 5M21 9l-5 5\"/>"),
+      vibe: svg("<rect x=\"7\" y=\"4\" width=\"10\" height=\"16\" rx=\"2\"/><path d=\"M4 9v6M20 9v6\"/>"),
+      still: svg("<rect x=\"7\" y=\"4\" width=\"10\" height=\"16\" rx=\"2\"/><path d=\"m3 3 18 18\"/>"),
+      again: svg("<path d=\"M3 12a9 9 0 1 0 3-6.7L3 8\"/><path d=\"M3 3v5h5\"/>"),
+    };
+    const money = (n) => Math.floor(n).toLocaleString("en-US");
+    const facesEl = $("faces");
+    const mobileEl = $("mobile-faces");
+    for (const face of FACES) {
+      const li = document.createElement("li");
+      li.dataset.id = String(face.id);
+      li.innerHTML = "<span class=\"dot\"></span><span class=\"name\"></span><span class=\"blurb\"></span>";
+      li.querySelector(".dot").style.background = TONE[face.id - 1];
+      li.querySelector(".name").textContent = face.name;
+      li.querySelector(".blurb").textContent = face.blurb;
+      facesEl.append(li);
+      const card = document.createElement("div");
+      card.className = "mini";
+      card.dataset.id = String(face.id);
+      card.innerHTML = "<span class=\"dot\"></span><span></span>";
+      card.querySelector(".dot").style.background = TONE[face.id - 1];
+      card.lastElementChild.textContent = face.name;
+      mobileEl.append(card);
+    }
+    $("resume").innerHTML = ICON.play + " Resume";
+    $("again").innerHTML = ICON.again + " Roll again";
+    const api = createLuckshift($("playfield"), render);
+    function render(hud) {
+      const playing = hud.phase === "play";
+      $("run").classList.toggle("hidden", !(playing || hud.phase === "pause"));
+      $("facebox").classList.toggle("hidden", !playing);
+      $("title").classList.toggle("hidden", hud.phase !== "title");
+      $("paused").classList.toggle("hidden", hud.phase !== "pause");
+      $("dead").classList.toggle("hidden", hud.phase !== "dead");
+      $("score").textContent = money(hud.score);
+      $("bestline").textContent = "Best " + money(hud.best);
+      $("combo").textContent = "\u00d7" + hud.combo + " combo";
+      $("combo").classList.toggle("hidden", hud.combo < 2);
+      $("facename").textContent = hud.faceName;
+      $("faceblurb").textContent = hud.ward ? "Ward up" : hud.faceBlurb;
+      const bar = $("facebar");
+      bar.style.width = Math.round(hud.faceT * 100) + "%";
+      bar.classList.toggle("rolling", hud.rolling);
+      $("sound").innerHTML = hud.sound ? ICON.vol : ICON.mute;
+      $("sound").setAttribute("aria-label", hud.sound ? "Mute sound" : "Unmute sound");
+      $("pause").innerHTML = playing ? ICON.pause : ICON.play;
+      $("pause").setAttribute("aria-label", playing ? "Pause" : "Resume");
+      $("sound-toggle").innerHTML = (hud.sound ? ICON.vol : ICON.mute) + (hud.sound ? " Sound on" : " Sound off");
+      $("shake-toggle").innerHTML = (hud.shake ? ICON.vibe : ICON.still) + (hud.shake ? " Shake on" : " Shake off");
+      $("final").textContent = money(hud.score);
+      $("verdict").textContent = hud.newBest ? "New best." : "Best " + money(hud.best);
+      $("stat-time").textContent = hud.seconds + "s";
+      $("stat-gems").textContent = String(hud.gems);
+      $("stat-close").textContent = String(hud.nears);
+      $("aside-best").textContent = hud.best > 0 ? " Best " + money(hud.best) + "." : "";
+      $("title-foot").textContent = hud.best > 0 ? "Best " + money(hud.best) : "P pauses";
+      for (const el of document.querySelectorAll("[data-id]")) {
+        el.classList.toggle("on", Number(el.dataset.id) === hud.face && hud.phase !== "dead");
+      }
+      $("live").textContent = hud.phase === "play" ? hud.faceName + ". " + hud.faceBlurb : hud.phase;
+    }
+    $("drop").addEventListener("click", () => api.start());
+    $("again").addEventListener("click", () => api.start());
+    $("resume").addEventListener("click", () => api.togglePause());
+    $("pause").addEventListener("click", () => api.togglePause());
+    $("sound").addEventListener("click", () => api.toggleSound());
+    $("sound-toggle").addEventListener("click", () => api.toggleSound());
+    $("shake-toggle").addEventListener("click", () => api.toggleShake());
+  </script>
+</body>
+</html>
