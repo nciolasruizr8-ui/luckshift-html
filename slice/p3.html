@@ -1,0 +1,274 @@
+            const dx = playerX - h.x;
+            const dy = PLAYER_Y - h.y;
+            const rr = HIT_R + h.w;
+            hit = dx * dx + dy * dy < rr * rr;
+        }
+        else {
+            hit = circleHitsRect(playerX, PLAYER_Y, HIT_R, h.x, h.y, h.w, h.h);
+        }
+        if (!hit || invuln > 0)
+            return;
+        if (h.kind === "chip" && face().smash) {
+            h.alive = false;
+            bumpCombo();
+            addScore(16, "smash");
+            pop = 1;
+            burst(h.x, h.y, CHIP, 8, 140);
+            audio.blip(180, 90, 0.07, 0.06);
+            trauma = Math.min(1, trauma + 0.18);
+            return;
+        }
+        if (ward) {
+            ward = false;
+            h.alive = false;
+            invuln = 0.85;
+            hitstop = 0.07;
+            trauma = Math.min(1, trauma + 0.55);
+            flash = 0.45;
+            pop = 1;
+            burst(playerX, PLAYER_Y, TEAL, 16, 180);
+            audio.ward();
+            floaters.push({
+                x: playerX,
+                y: PLAYER_Y - 36,
+                text: "ward",
+                life: 0.7,
+                max: 0.7,
+                color: TEAL,
+            });
+            return;
+        }
+        kill();
+    }
+    function nearMiss(h) {
+        if (!h.alive || h.checked)
+            return;
+        const cy = h.kind === "chip" ? h.y : h.y + h.h / 2;
+        if (cy < PLAYER_Y)
+            return;
+        h.checked = true;
+        let clear;
+        if (h.kind === "chip")
+            clear = Math.abs(playerX - h.x) - (HIT_R + h.w);
+        else if (playerX < h.x)
+            clear = h.x - playerX - HIT_R;
+        else if (playerX > h.x + h.w)
+            clear = playerX - (h.x + h.w) - HIT_R;
+        else
+            clear = -1;
+        if (clear >= 0 && clear < 34) {
+            nears += 1;
+            bumpCombo();
+            addScore(22, "close");
+            burst(playerX, PLAYER_Y, PAPER, 6, 80);
+            audio.blip(720, 980, 0.06, 0.035);
+        }
+    }
+    function collectGem(g, x, y) {
+        if (!g.alive)
+            return;
+        const dx = g.x - x;
+        const dy = g.y - y;
+        if (dx * dx + dy * dy > (HIT_R + 11) * (HIT_R + 11))
+            return;
+        g.alive = false;
+        gems += 1;
+        bumpCombo();
+        addScore(10, "points");
+        pop = 1;
+        burst(g.x, g.y, TEAL, 8, 110);
+        audio.blip(660, 1180, 0.07, 0.05);
+    }
+    function updatePlay(dt) {
+        if (dying > 0) {
+            dying -= dt;
+            if (dying <= 0)
+                finishDeath();
+            return;
+        }
+        runT += dt;
+        seconds += dt;
+        hint = Math.max(0, hint - dt);
+        invuln = Math.max(0, invuln - dt);
+        comboT -= dt;
+        if (comboT <= 0)
+            combo = 0;
+        updateFace(dt);
+        updatePlayer(dt);
+        updateEcho(dt);
+        const diff = difficulty();
+        const scroll = scrollSpeed();
+        distance += scroll * dt;
+        score += scroll * dt * 0.05 * face().score;
+        scrollMeter += scroll * dt;
+        if (scrollMeter >= spawnSpacing(diff)) {
+            scrollMeter = 0;
+            spawn(diff);
+        }
+        for (const h of hazards) {
+            h.y += scroll * dt;
+            collideHazard(h);
+            nearMiss(h);
+        }
+        for (let i = hazards.length - 1; i >= 0; i--) {
+            const h = hazards[i];
+            if (!h.alive || h.y > VH + 80)
+                hazards.splice(i, 1);
+        }
+        const ghostX = echo[0] ?? playerX;
+        for (const g of gemList) {
+            if (!g.alive)
+                continue;
+            g.y += scroll * dt;
+            g.spin += dt * 2.4;
+            if (face().magnet) {
+                const dx = playerX - g.x;
+                const dy = PLAYER_Y - g.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 168 && dist > 0.001) {
+                    g.x += (dx / dist) * 240 * dt;
+                    g.y += (dy / dist) * 240 * dt;
+                }
+            }
+            collectGem(g, playerX, PLAYER_Y);
+            if (face().echo)
+                collectGem(g, ghostX, PLAYER_Y);
+        }
+        for (let i = gemList.length - 1; i >= 0; i--) {
+            const g = gemList[i];
+            if (!g.alive || g.y > VH + 40)
+                gemList.splice(i, 1);
+        }
+    }
+    function updateDecor(dt) {
+        titleT += dt;
+        if (titleT > 1.45) {
+            titleT = 0;
+            preview = (preview + 1) % 6;
+            pushHud(true);
+        }
+        spin += dt * 0.8;
+        playerX = VW / 2 + Math.sin(time * 0.7) * 18;
+        if (Math.random() < dt * 14) {
+            const p = particles.find((item) => !item.alive);
+            if (p) {
+                p.alive = true;
+                p.x = 36 + Math.random() * (VW - 72);
+                p.y = 20 + Math.random() * (VH - 40);
+                p.vx = (Math.random() - 0.5) * 12;
+                p.vy = 16 + Math.random() * 22;
+                p.life = p.max = 1.1 + Math.random() * 0.6;
+                p.size = 1.4 + Math.random() * 1.6;
+                p.color = Math.random() < 0.5 ? AMBER : TEAL;
+            }
+        }
+    }
+    function updatePresentation(dt) {
+        trauma = Math.max(0, trauma - dt * 1.7);
+        flash = Math.max(0, flash - dt * 1.8);
+        pop = Math.max(0, pop - dt * 4.5);
+        lockPulse = Math.max(0, lockPulse - dt * 1.15);
+        for (const p of particles) {
+            if (!p.alive)
+                continue;
+            p.life -= dt;
+            if (p.life <= 0) {
+                p.alive = false;
+                continue;
+            }
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vy += 40 * dt;
+            p.vx *= 1 - Math.min(1, dt * 1.4);
+        }
+        for (let i = floaters.length - 1; i >= 0; i--) {
+            const f = floaters[i];
+            f.life -= dt;
+            f.y -= 36 * dt;
+            if (f.life <= 0)
+                floaters.splice(i, 1);
+        }
+    }
+    function measure() {
+        const rect = canvas.getBoundingClientRect();
+        const cssW = Math.max(1, rect.width);
+        const cssH = Math.max(1, rect.height);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const bw = Math.round(cssW * dpr);
+        const bh = Math.round(cssH * dpr);
+        if (canvas.width !== bw || canvas.height !== bh) {
+            canvas.width = bw;
+            canvas.height = bh;
+        }
+        const scale = Math.min(cssW / VW, cssH / VH);
+        layout = {
+            scale,
+            ox: (cssW - VW * scale) / 2,
+            oy: (cssH - VH * scale) / 2,
+            cssW,
+            cssH,
+        };
+        return dpr;
+    }
+    function virtualX(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        const cssX = clientX - rect.left;
+        return (cssX - layout.ox) / layout.scale;
+    }
+    function drawDie(x, y, size, pip, alpha) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(spin);
+        const stretch = clamp(Math.abs(playerVx) / 520, 0, 0.16);
+        const squash = 1 + pop * 0.14;
+        ctx.scale((1 + stretch) * squash, (1 - stretch * 0.65) * squash);
+        ctx.globalAlpha = alpha;
+        const s = size;
+        const grd = ctx.createLinearGradient(-s, -s, s, s);
+        grd.addColorStop(0, "#f0c36a");
+        grd.addColorStop(1, "#c4842a");
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.roundRect(-s, -s, s * 2, s * 2, s * 0.38);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(16,22,20,0.35)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = INK;
+        if (pip === null) {
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.strokeStyle = INK;
+            ctx.lineWidth = 2;
+            for (let i = -1; i <= 1; i++) {
+                ctx.beginPath();
+                ctx.arc(i * s * 0.28, 0, s * 0.16, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+            }
+        }
+        else {
+            drawPips(pip, s * 0.62);
+        }
+        ctx.restore();
+    }
+    function drawPips(n, r) {
+        const spots = {
+            1: [[0, 0]],
+            2: [[-0.55, -0.55], [0.55, 0.55]],
+            3: [[-0.6, -0.6], [0, 0], [0.6, 0.6]],
+            4: [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]],
+            5: [[-0.58, -0.58], [0.58, -0.58], [0, 0], [-0.58, 0.58], [0.58, 0.58]],
+            6: [[-0.58, -0.62], [0.58, -0.62], [-0.58, 0], [0.58, 0], [-0.58, 0.62], [0.58, 0.62]],
+        };
+        const list = spots[n] ?? spots[1];
+        for (const [px, py] of list) {
+            ctx.beginPath();
+            ctx.arc(px * r, py * r, Math.max(2.2, r * 0.16), 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    function render() {
+        const dpr = measure();
+        const { scale, ox, oy, cssW, cssH } = layout;
+        const mag = shakeOn ? trauma * trauma * 12 : 0;
+        const sx = Math.sin(time * 41) * mag;
+        const sy = Math.cos(time * 33) * mag * 0.8;
